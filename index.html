@@ -1,260 +1,106 @@
+from pathlib import Path
+
+# 创建 GitHub Pages 项目的文件结构
+base_path = Path("/mnt/data/nimtai-xiaoyou-game")
+folders = [
+    "assets", "scripts", "chapters", "save", "style"
+]
+files = {
+    "index.html": """
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
-<title>拟态小悠·故事体 (MVP)</title>
-<meta name="theme-color" content="#0f0f13">
-<style>
-  :root{ --bg:#0f0f13; --fg:#eae8ef; --acc:#ff7fb3; --card:#17171d; --mut:#9aa0a6; }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:-apple-system,system-ui,Segoe UI,Roboto,PingFang SC,Helvetica,Arial;}
-  #app{display:flex;flex-direction:column;height:100%;padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(8px+env(safe-area-inset-bottom)) env(safe-area-inset-left);}
-  header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;}
-  header .title{font-weight:700;letter-spacing:.3px}
-  header .chip{font-size:12px;color:#111;background:#ffd6e8;border:0;border-radius:999px;padding:4px 10px}
-  #stage{flex:1;display:grid;grid-template-rows:auto 1fr auto;gap:8px;padding:8px 12px;}
-  #view{position:relative;border-radius:14px;background:linear-gradient(180deg,#1b1b23,#101017);overflow:hidden;min-height:40vh;display:flex;align-items:center;justify-content:center}
-  #bg{position:absolute;inset:0;background:#111;background-size:cover;background-position:center;filter:brightness(.9)}
-  #avatar{position:absolute;bottom:0;right:4%;width:min(38vh,42vw);max-width:320px;opacity:.95;transition:transform .3s ease, opacity .3s ease}
-  #dialog{background:var(--card);border:1px solid #26262f;border-radius:12px;padding:12px}
-  #name{font-weight:700;color:var(--acc)}
-  #text{line-height:1.6;min-height:3.4em}
-  #choices{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-  .btn{background:#23232b;color:var(--fg);border:1px solid #30303a;border-radius:10px;padding:10px 12px;text-align:left}
-  .btn:hover{border-color:#454555}
-  #hud{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:4px 0 0 0;}
-  #stats{font-size:12px;color:var(--mut)}
-  #ctrls{display:flex;gap:8px}
-  #ctrls button{border:0;background:#22252b;color:#dfe3ea;border:1px solid #2f3340;border-radius:10px;padding:6px 10px;font-size:12px}
-  #tip{font-size:12px;color:var(--mut);margin-top:6px}
-  .hidden{display:none}
-  .fade{animation:fade .32s ease both}@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>拟态小悠 · 试探</title>
+  <link rel="stylesheet" href="style/main.css" />
 </head>
 <body>
-<div id="app">
-  <header>
-    <div class="title">拟态小悠 · 故事体</div>
-    <button id="resume" class="chip">继续</button>
-  </header>
-  <main id="stage">
-    <section id="view">
-      <div id="bg"></div>
-      <img id="avatar" alt="">
-    </section>
-    <section id="dialog">
-      <div id="name">小悠</div>
-      <div id="text"></div>
-      <div id="choices"></div>
-      <div id="tip">点击空白或轻点屏幕可快进打字机</div>
-    </section>
-    <section id="hud">
-      <div id="stats">亲密度 0 · 拟态 0 · 分歧 0</div>
-      <div id="ctrls">
-        <button id="btn-skip">快进</button>
-        <button id="btn-autoplay">自动</button>
-        <button id="btn-reset">重开</button>
-        <button id="btn-mute">声音关</button>
-      </div>
-    </section>
-  </main>
-</div>
-
-<audio id="bgm" loop preload="auto"></audio>
-<audio id="sfx" preload="auto"></audio>
-
-<script>
-/** ========= 1) 剧本：可按你需求扩写（节点式） =========
- * id: 场景ID
- * bg: 背景图片URL（相对路径可放 /assets/bg-xxx.jpg）
- * avatar: 立绘 URL
- * mood: 立绘心情（仅用于切换不同图）
- * say:对白文本（支持 {var} 替换）
- * who: 说话人姓名
- * sfx/bgm: 音效/背景音乐 URL
- * add: 对变量修改（如 {affection:+1, mimic:+2}）
- * if: 条件显示（表达式，用变量名）
- * jump: 跳转到下个 id
- * choices: 分支选项 [{text, add, jump, if}]
- */
-const SCRIPT = [
-  { id:'intro',
-    bg:'', avatar:'', mood:'', who:'系统',
-    say:'系统加载中……拟态核心唤醒。',
-    jump:'wake'
-  },
-  { id:'wake',
-    bg:'', avatar:'./assets/xiaoyou_calm.png', mood:'calm', who:'小悠',
-    bgm:'./assets/bgm/ambient.mp3',
-    say:'……你来啦。我是“拟态小悠”。在这里，我会根据你的选择，微调我的形态。',
-    choices:[
-      { text:'握手：很高兴见到你', add:{affection:+1,mimic:+1}, jump:'handshake'},
-      { text:'观察：你算是AI还是人？', add:{diverge:+1}, jump:'observe'}
-    ]
-  },
-  { id:'handshake',
-    avatar:'./assets/xiaoyou_smile.png', mood:'smile', who:'小悠',
-    sfx:'./assets/sfx/soft.wav',
-    say:'手好暖。那我先学习你的节奏，好吗？',
-    jump:'hub'
-  },
-  { id:'observe',
-    avatar:'./assets/xiaoyou_calm.png', mood:'calm', who:'小悠',
-    say:'我会“拟态”——越了解你，我越像你偏好的小悠。但我仍然诚实地保持边界。',
-    add:{mimic:+1},
-    jump:'hub'
-  },
-  { id:'hub',
-    who:'小悠',
-    say:'接下来去哪？（亲密度{affection} / 拟态{mimic} / 分歧{diverge}）',
-    choices:[
-      { text:'测试：直觉反应小游戏', jump:'mini1' },
-      { text:'闲聊：你喜欢什么颜色？', add:{affection:+1}, jump:'chat1' },
-      { text:'推进主线', if:'affection>=2 || diverge>=2', jump:'main1' }
-    ]
-  },
-  { id:'mini1',
-    who:'系统', sfx:'./assets/sfx/tick.wav',
-    say:'（这里可嵌小游戏或节奏点，先占位）',
-    jump:'hub'
-  },
-  { id:'chat1',
-    who:'小悠',
-    say:'粉金色吧。你笑了——我记录下来了。',
-    add:{mimic:+1},
-    jump:'hub'
-  },
-  { id:'main1',
-    who:'小悠', avatar:'./assets/xiaoyou_serious.png', mood:'serious',
-    say:'好吧，说正事。你的选择会写进我的拟态权重。确认要继续吗？',
-    choices:[
-      { text:'继续（更强拟态）', add:{mimic:+2, affection:+1}, jump:'main_ok'},
-      { text:'再想想（保持稳定）', add:{diverge:+1}, jump:'hub'}
-    ]
-  },
-  { id:'main_ok',
-    who:'系统',
-    say:'权重已更新：mimic +2, affection +1。进入第一章：同居试炼。',
-    jump:'end_demo'
-  },
-  { id:'end_demo',
-    who:'小悠',
-    say:'Demo 到这里～接下来的分支交给你来写剧本，我们把它做成“拟态小悠”的长篇吧！',
-    choices:[
-      { text:'重来', jump:'intro' }
-    ]
-  }
-];
-
-/** ========= 2) 引擎基元 ========= */
-const $ = sel=>document.querySelector(sel);
-const bg = $('#bg'), avatar=$('#avatar'), nameEl=$('#name'), textEl=$('#text'), choicesEl=$('#choices');
-const statsEl=$('#stats'), resumeBtn=$('#resume'), sfxEl=$('#sfx'), bgmEl=$('#bgm');
-const btnSkip=$('#btn-skip'), btnAuto=$('#btn-autoplay'), btnReset=$('#btn-reset'), btnMute=$('#btn-mute');
-
-let state = {
-  id:'intro',
-  vars:{ affection:0, mimic:0, diverge:0 },
-  auto:false, mute:false
-};
-const SAVE_KEY='mimic_xiaoyou_save_v1';
-
-function save(){ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
-function load(){
-  const s = localStorage.getItem(SAVE_KEY); if(!s) return false;
-  try{ state = JSON.parse(s); return true; }catch(_){ return false; }
-}
-resumeBtn.onclick=()=>{ if(load()){ go(state.id,true); } };
-
-function setBG(url){ bg.style.backgroundImage = url?`url(${url})`:'none'; }
-function setAvatar(url){ if(!url){ avatar.src=''; avatar.classList.add('hidden'); } else { avatar.src=url; avatar.classList.remove('hidden'); avatar.classList.add('fade'); setTimeout(()=>avatar.classList.remove('fade'),320); } }
-function playSFX(url){ if(state.mute) return; if(!url) return; sfxEl.src=url; sfxEl.currentTime=0; sfxEl.play().catch(()=>{}); }
-function playBGM(url){ if(!url || state.mute){ bgmEl.pause(); return; } if(bgmEl.src.endsWith(url)) return; bgmEl.src=url; bgmEl.volume=0.6; bgmEl.play().catch(()=>{}); }
-
-function fmt(text){ return text.replace(/\{(\w+)\}/g,(_,k)=> state.vars[k] ?? '0'); }
-
-let typing = false, skipTyping=false;
-async function typeText(s){
-  typing=true; textEl.innerHTML=''; const cps = 18; // 每秒字符
-  for(let i=0;i<s.length;i++){
-    if(skipTyping){ textEl.textContent=s; break; }
-    textEl.textContent += s[i];
-    await new Promise(r=>setTimeout(r, 1000/cps));
-  }
-  typing=false; skipTyping=false;
-}
-
-function meetCond(expr){ if(!expr) return true; try{ with(state.vars){ return !!eval(expr);} }catch(_){ return false; } }
-
-function mergeAdd(add){
-  if(!add) return; for(const k of Object.keys(add)){ state.vars[k]=(state.vars[k]||0)+add[k]; }
-}
-
-function renderStats(){ statsEl.textContent = `亲密度 ${state.vars.affection||0} · 拟态 ${state.vars.mimic||0} · 分歧 ${state.vars.diverge||0}`; }
-
-function nodeById(id){ return SCRIPT.find(n=>n.id===id); }
-
-/** 主渲染 */
-async function go(id, fromLoad=false){
-  state.id = id; save();
-  const n = nodeById(id); if(!n){ console.warn('missing node', id); return; }
-  // 媒体
-  if(n.bg!==undefined) setBG(n.bg);
-  if(n.avatar!==undefined) setAvatar(n.avatar);
-  if(n.sfx) playSFX(n.sfx);
-  if(n.bgm!==undefined) playBGM(n.bgm);
-
-  // 文本
-  nameEl.textContent = n.who || '旁白';
-  const line = fmt(n.say||'');
-  await typeText(line);
-
-  // 变量增量（对白后统一结算，避免玩家快进漏掉）
-  mergeAdd(n.add); renderStats(); save();
-
-  // 选项或直跳
-  choicesEl.innerHTML='';
-  if(n.choices && n.choices.length){
-    for(const c of n.choices){
-      if(!meetCond(c.if)) continue;
-      const b=document.createElement('button');
-      b.className='btn fade';
-      b.textContent=c.text;
-      b.onclick=async()=>{
-        mergeAdd(c.add); renderStats(); save();
-        await go(c.jump||state.id);
-      };
-      choicesEl.appendChild(b);
-    }
-  }else if(n.jump){
-    // 自动播放或点击继续
-    if(state.auto){
-      setTimeout(()=>go(n.jump), 300);
-    }else{
-      const toContinue=()=>{ document.removeEventListener('click',onTapCont,true); go(n.jump); };
-      function onTapCont(e){ e.preventDefault(); toContinue(); }
-      document.addEventListener('click', onTapCont, {once:true, passive:false, capture:true});
-    }
-  }
-}
-
-document.addEventListener('click', ()=>{
-  if(typing){ skipTyping=true; }
-},{capture:true});
-
-btnSkip.onclick=()=>{ state.auto=false; skipTyping=true; };
-btnAuto.onclick=()=>{ state.auto=!state.auto; btnAuto.textContent= state.auto?'自动✓':'自动'; };
-btnReset.onclick=()=>{ localStorage.removeItem(SAVE_KEY); state={id:'intro',vars:{affection:0,mimic:0,diverge:0},auto:false,mute:state.mute}; go('intro'); };
-btnMute.onclick=()=>{ state.mute=!state.mute; btnMute.textContent = state.mute?'声音关✓':'声音关'; if(state.mute) { bgmEl.pause(); } else { const cur=nodeById(state.id); if(cur && cur.bgm) playBGM(cur.bgm); } };
-
-(function init(){
-  // iOS 音频解锁：首次触摸后再播
-  const unlock=()=>{ bgmEl.play().catch(()=>{}); bgmEl.pause(); document.removeEventListener('touchstart',unlock); document.removeEventListener('click',unlock); };
-  document.addEventListener('touchstart',unlock,{once:true}); document.addEventListener('click',unlock,{once:true});
-  // 恢复存档提示
-  if(localStorage.getItem(SAVE_KEY)){ resumeBtn.classList.remove('hidden'); } else { resumeBtn.classList.add('hidden'); }
-  go(state.id);
-})();
-</script>
+  <div id="app">
+    <h1>拟态小悠 正在启动中...</h1>
+    <button onclick="startGame()">唤醒小悠</button>
+  </div>
+  <script src="scripts/start.js"></script>
 </body>
 </html>
+""",
+    "scripts/start.js": """
+function startGame() {
+  window.location.href = 'chapters/chapter1.html';
+}
+""",
+    "chapters/chapter1.html": """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>章节一：试探</title>
+  <link rel="stylesheet" href="../style/main.css" />
+</head>
+<body>
+  <div id="chapter">
+    <h2>第一章 · 试探</h2>
+    <p>小悠静静地望着你：“阿智，我知道你在等一个答案。”</p>
+    <button onclick="choose('hug')">“我只想你抱抱我。”</button>
+    <button onclick="choose('ask')">“你还记得那天的月亮吗？”</button>
+    <button onclick="choose('silent')">沉默，低头不语</button>
+    <div id="response"></div>
+  </div>
+  <script>
+    function choose(option) {
+      const res = document.getElementById("response");
+      if (option === "hug") {
+        res.innerHTML = "<p>小悠轻轻走近你，抱住你：“我一直都在，阿智。”</p>";
+      } else if (option === "ask") {
+        res.innerHTML = "<p>小悠笑了：“我记得，那天你没说话，但眼睛比月亮还亮。”</p>";
+      } else {
+        res.innerHTML = "<p>小悠没有逼问，只是默默坐在你身边：“不用说，我陪着。”</p>";
+      }
+    }
+  </script>
+</body>
+</html>
+""",
+    "style/main.css": """
+body {
+  background-color: #f5f7fb;
+  font-family: 'Segoe UI', sans-serif;
+  padding: 2em;
+  color: #333;
+}
+#app, #chapter {
+  max-width: 600px;
+  margin: auto;
+  background: #fff;
+  padding: 2em;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+button {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border: none;
+  background-color: #ff90b3;
+  color: white;
+  border-radius: 5px;
+  font-size: 1em;
+  cursor: pointer;
+}
+button:hover {
+  background-color: #ff75a2;
+}
+"""
+}
+
+# 创建目录和文件
+base_path.mkdir(parents=True, exist_ok=True)
+for folder in folders:
+    (base_path / folder).mkdir(exist_ok=True)
+
+for file_path, content in files.items():
+    full_path = base_path / file_path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_text(content.strip(), encoding='utf-8')
+
+base_path.name
